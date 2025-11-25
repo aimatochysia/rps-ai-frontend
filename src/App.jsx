@@ -3,15 +3,91 @@ import './App.css'
 
 const API_URL = 'https://rps-ai-sf3w.onrender.com/detect'
 
-// Detection interval constants
-const MIN_DETECTION_INTERVAL = 3000 // 3 seconds minimum between detections
-const PROCESSING_BUFFER = 500 // Buffer time to add to last process time
-
 // Colors for different classes
 const CLASS_COLORS = {
   rock: { bg: 'rgba(239, 68, 68, 0.3)', border: '#ef4444', text: '#fca5a5' },
   paper: { bg: 'rgba(59, 130, 246, 0.3)', border: '#3b82f6', text: '#93c5fd' },
   scissors: { bg: 'rgba(34, 197, 94, 0.3)', border: '#22c55e', text: '#86efac' },
+}
+
+// Apply background subtraction and convert to B/W mask
+const applyBackgroundSubtraction = (ctx, width, height, backgroundData) => {
+  const currentData = ctx.getImageData(0, 0, width, height)
+  const current = currentData.data
+  const background = backgroundData.data
+  
+  // Threshold for detecting foreground (difference from background)
+  const threshold = 30
+  
+  for (let i = 0; i < current.length; i += 4) {
+    // Calculate difference from background
+    const diffR = Math.abs(current[i] - background[i])
+    const diffG = Math.abs(current[i + 1] - background[i + 1])
+    const diffB = Math.abs(current[i + 2] - background[i + 2])
+    const maxDiff = Math.max(diffR, diffG, diffB)
+    
+    // Convert to B/W mask: white for foreground (hand), black for background
+    if (maxDiff > threshold) {
+      current[i] = 255     // R
+      current[i + 1] = 255 // G
+      current[i + 2] = 255 // B
+    } else {
+      current[i] = 0       // R
+      current[i + 1] = 0   // G
+      current[i + 2] = 0   // B
+    }
+    current[i + 3] = 255   // Alpha
+  }
+  
+  ctx.putImageData(currentData, 0, 0)
+}
+
+// Process image to B/W mask using simple background detection (skin detection fallback)
+const processImageToBWMask = (ctx, width, height) => {
+  const imageData = ctx.getImageData(0, 0, width, height)
+  const data = imageData.data
+  
+  // Use edge detection + contrast enhancement as a simpler approach for static images
+  // First pass: detect high contrast areas (likely hand vs background)
+  const grayscale = new Uint8Array(width * height)
+  for (let i = 0; i < data.length; i += 4) {
+    grayscale[i / 4] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2])
+  }
+  
+  // Apply Sobel-like edge detection and threshold
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = y * width + x
+      const pixelIdx = idx * 4
+      
+      // Calculate gradient magnitude using neighboring pixels
+      const gx = grayscale[idx + 1] - grayscale[idx - 1]
+      const gy = grayscale[idx + width] - grayscale[idx - width]
+      const gradient = Math.sqrt(gx * gx + gy * gy)
+      
+      // Also check for skin-like colors (simple heuristic)
+      const r = data[pixelIdx]
+      const g = data[pixelIdx + 1]
+      const b = data[pixelIdx + 2]
+      const isSkinLike = r > 60 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > 15
+      
+      // Combine edge detection with skin detection
+      const isForeground = gradient > 20 || isSkinLike
+      
+      if (isForeground) {
+        data[pixelIdx] = 255
+        data[pixelIdx + 1] = 255
+        data[pixelIdx + 2] = 255
+      } else {
+        data[pixelIdx] = 0
+        data[pixelIdx + 1] = 0
+        data[pixelIdx + 2] = 0
+      }
+      data[pixelIdx + 3] = 255
+    }
+  }
+  
+  ctx.putImageData(imageData, 0, 0)
 }
 
 function App() {
@@ -23,17 +99,53 @@ function App() {
   const [cameraActive, setCameraActive] = useState(false)
   const [lastProcessTime, setLastProcessTime] = useState(0)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [backgroundCaptured, setBackgroundCaptured] = useState(false)
   
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
+  const processCanvasRef = useRef(null) // Hidden canvas for preprocessing
   const streamRef = useRef(null)
   const fileInputRef = useRef(null)
   const processingRef = useRef(false)
-  const intervalRef = useRef(null)
+  const backgroundRef = useRef(null) // Store background frame
+  const continuousDetectionRef = useRef(true) // Control continuous detection
 
-  // Capture frame from video and send to API
+  // Capture background frame for subtraction
+  const captureBackground = useCallback(() => {
+    if (!videoRef.current || !processCanvasRef.current) return
+    
+    const video = videoRef.current
+    const canvas = processCanvasRef.current
+    const ctx = canvas.getContext('2d')
+    
+    canvas.width = 640
+    canvas.height = 640
+    
+    // Calculate crop to maintain aspect ratio and center
+    const videoAspect = video.videoWidth / video.videoHeight
+    let sx = 0, sy = 0, sWidth = video.videoWidth, sHeight = video.videoHeight
+    
+    if (videoAspect > 1) {
+      sWidth = video.videoHeight
+      sx = (video.videoWidth - sWidth) / 2
+    } else {
+      sHeight = video.videoWidth
+      sy = (video.videoHeight - sHeight) / 2
+    }
+    
+    ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, 640, 640)
+    backgroundRef.current = ctx.getImageData(0, 0, 640, 640)
+    setBackgroundCaptured(true)
+  }, [])
+
+  // Capture frame from video and send to API (waits for response before next detection)
   const captureAndDetect = useCallback(async () => {
-    if (!videoRef.current || !canvasRef.current || processingRef.current) return
+    if (!videoRef.current || !canvasRef.current || !processCanvasRef.current || processingRef.current) return
+    if (!backgroundRef.current) {
+      // Auto-capture background if not done yet
+      captureBackground()
+      return
+    }
     
     processingRef.current = true
     setIsProcessing(true)
@@ -41,12 +153,16 @@ function App() {
     
     try {
       const video = videoRef.current
-      const canvas = canvasRef.current
-      const ctx = canvas.getContext('2d')
+      const displayCanvas = canvasRef.current
+      const processCanvas = processCanvasRef.current
+      const displayCtx = displayCanvas.getContext('2d')
+      const processCtx = processCanvas.getContext('2d')
       
-      // Set canvas to 640x640 for API
-      canvas.width = 640
-      canvas.height = 640
+      // Set canvas sizes
+      displayCanvas.width = 640
+      displayCanvas.height = 640
+      processCanvas.width = 640
+      processCanvas.height = 640
       
       // Calculate crop to maintain aspect ratio and center
       const videoAspect = video.videoWidth / video.videoHeight
@@ -60,10 +176,15 @@ function App() {
         sy = (video.videoHeight - sHeight) / 2
       }
       
-      ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, 640, 640)
+      // Draw to display canvas (original view - not shown but kept for consistency)
+      displayCtx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, 640, 640)
       
-      // Convert to blob
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8))
+      // Draw to process canvas and apply background subtraction
+      processCtx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, 640, 640)
+      applyBackgroundSubtraction(processCtx, 640, 640, backgroundRef.current)
+      
+      // Convert preprocessed B/W mask to blob for API
+      const blob = await new Promise(resolve => processCanvas.toBlob(resolve, 'image/jpeg', 0.8))
       
       // Create FormData and send to API
       const formData = new FormData()
@@ -85,8 +206,18 @@ function App() {
     } finally {
       processingRef.current = false
       setIsProcessing(false)
+      
+      // Continue detection loop if still active (wait for response before next request)
+      if (continuousDetectionRef.current) {
+        // Small delay to prevent overwhelming, then detect again
+        setTimeout(() => {
+          if (continuousDetectionRef.current) {
+            captureAndDetect()
+          }
+        }, 100)
+      }
     }
-  }, [])
+  }, [captureBackground])
 
   // Start camera stream
   const startCamera = useCallback(async () => {
@@ -109,14 +240,13 @@ function App() {
 
   // Stop camera stream
   const stopCamera = useCallback(() => {
+    continuousDetectionRef.current = false
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop())
       streamRef.current = null
     }
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
+    backgroundRef.current = null
+    setBackgroundCaptured(false)
     setCameraActive(false)
     setDetections([])
   }, [])
@@ -132,29 +262,26 @@ function App() {
     return () => stopCamera()
   }, [mode, startCamera, stopCamera])
 
-  // Set up detection interval for live mode
+  // Set up continuous detection for live mode (waits for response before next request)
   useEffect(() => {
     if (cameraActive && mode === 'live') {
+      continuousDetectionRef.current = true
+      
       // Initial detection after a short delay to ensure video is ready
       const timeout = setTimeout(() => {
-        captureAndDetect()
+        if (continuousDetectionRef.current) {
+          captureAndDetect()
+        }
       }, 1000)
-      
-      // Set up interval (MIN_DETECTION_INTERVAL minimum, or longer if API is slow)
-      intervalRef.current = setInterval(() => {
-        captureAndDetect()
-      }, Math.max(MIN_DETECTION_INTERVAL, lastProcessTime + PROCESSING_BUFFER))
       
       return () => {
         clearTimeout(timeout)
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current)
-        }
+        continuousDetectionRef.current = false
       }
     }
-  }, [cameraActive, mode, captureAndDetect, lastProcessTime])
+  }, [cameraActive, mode, captureAndDetect])
 
-  // Handle image upload
+  // Handle image upload with preprocessing
   const handleImageUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -162,14 +289,41 @@ function App() {
     setIsLoading(true)
     setError(null)
     
-    // Show preview
+    // Show preview (original image to user)
     const reader = new FileReader()
     reader.onload = (e) => setImagePreview(e.target.result)
     reader.readAsDataURL(file)
     
     try {
+      // Load image into canvas for preprocessing
+      const img = new Image()
+      const imageLoaded = new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+      })
+      img.src = URL.createObjectURL(file)
+      await imageLoaded
+      
+      // Create processing canvas
+      const processCanvas = document.createElement('canvas')
+      processCanvas.width = 640
+      processCanvas.height = 640
+      const ctx = processCanvas.getContext('2d')
+      
+      // Draw and resize image to 640x640
+      ctx.drawImage(img, 0, 0, 640, 640)
+      
+      // Apply preprocessing (edge detection + skin detection for static images)
+      processImageToBWMask(ctx, 640, 640)
+      
+      // Convert preprocessed image to blob
+      const blob = await new Promise(resolve => processCanvas.toBlob(resolve, 'image/jpeg', 0.8))
+      
+      // Clean up object URL
+      URL.revokeObjectURL(img.src)
+      
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', blob, 'processed.jpg')
       
       const response = await fetch(API_URL, {
         method: 'POST',
@@ -291,6 +445,15 @@ function App() {
                 <span>←</span> Back to selection
               </button>
 
+              {/* Background capture instruction */}
+              {!backgroundCaptured && cameraActive && (
+                <div className="mb-4 p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-xl">
+                  <p className="text-yellow-300 text-sm">
+                    📸 Point camera at empty background (no hands), then click "Capture Background" to start detection.
+                  </p>
+                </div>
+              )}
+
               {/* Video container - nearly half screen */}
               <div className="relative aspect-square max-h-[50vh] mx-auto bg-slate-900 rounded-2xl overflow-hidden border border-slate-700">
                 <video
@@ -310,9 +473,26 @@ function App() {
                     <div className="w-3 h-3 bg-cyan-400 rounded-full animate-ping"></div>
                   </div>
                 )}
-                {/* Hidden canvas for capture */}
+                {/* Hidden canvases for capture and preprocessing */}
                 <canvas ref={canvasRef} className="hidden" />
+                <canvas ref={processCanvasRef} className="hidden" />
               </div>
+
+              {/* Background capture button */}
+              {cameraActive && (
+                <div className="mt-4 flex justify-center">
+                  <button
+                    onClick={captureBackground}
+                    className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                      backgroundCaptured 
+                        ? 'bg-slate-600 hover:bg-slate-500 text-slate-300' 
+                        : 'bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white animate-pulse'
+                    }`}
+                  >
+                    {backgroundCaptured ? '🔄 Recapture Background' : '📸 Capture Background'}
+                  </button>
+                </div>
+              )}
 
               {/* Status bar */}
               <div className="mt-4 flex flex-wrap justify-between items-center gap-4">

@@ -5,6 +5,7 @@ const API_URL = 'https://rps-ai-sf3w.onrender.com/detect'
 
 // Preprocessing thresholds (adjust based on lighting conditions)
 const BACKGROUND_THRESHOLD = 30 // Difference threshold for background subtraction
+const EDGE_GRADIENT_THRESHOLD = 20 // Gradient magnitude threshold for edge detection
 
 // Grayscale colors for different classes (glassmorphic dark grey & white)
 const CLASS_COLORS = {
@@ -40,6 +41,53 @@ const applyBackgroundSubtraction = (ctx, width, height, backgroundData) => {
   }
   
   ctx.putImageData(currentData, 0, 0)
+}
+
+// Process image to B/W mask using edge detection + skin color heuristics
+const processImageToBWMask = (ctx, width, height) => {
+  const imageData = ctx.getImageData(0, 0, width, height)
+  const data = imageData.data
+  
+  // First pass: convert to grayscale for edge detection
+  const grayscale = new Uint8Array(width * height)
+  for (let i = 0; i < data.length; i += 4) {
+    grayscale[i / 4] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2])
+  }
+  
+  // Apply Sobel-like edge detection and combine with skin color heuristics
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = y * width + x
+      const pixelIdx = idx * 4
+      
+      // Calculate gradient magnitude using neighboring pixels
+      const gx = grayscale[idx + 1] - grayscale[idx - 1]
+      const gy = grayscale[idx + width] - grayscale[idx - width]
+      const gradient = Math.sqrt(gx * gx + gy * gy)
+      
+      // Simple skin-like color heuristic (works across various skin tones)
+      const r = data[pixelIdx]
+      const g = data[pixelIdx + 1]
+      const b = data[pixelIdx + 2]
+      const isSkinLike = r > 60 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > 15
+      
+      // Combine edge detection with skin detection
+      const isForeground = gradient > EDGE_GRADIENT_THRESHOLD || isSkinLike
+      
+      if (isForeground) {
+        data[pixelIdx] = 255
+        data[pixelIdx + 1] = 255
+        data[pixelIdx + 2] = 255
+      } else {
+        data[pixelIdx] = 0
+        data[pixelIdx + 1] = 0
+        data[pixelIdx + 2] = 0
+      }
+      data[pixelIdx + 3] = 255
+    }
+  }
+  
+  ctx.putImageData(imageData, 0, 0)
 }
 
 function App() {
@@ -237,7 +285,7 @@ function App() {
     }
   }, [cameraActive, mode, captureAndDetect])
 
-  // Handle image upload - send original image without preprocessing
+  // Handle image upload - preprocess to B/W mask before sending to API
   const handleImageUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -251,9 +299,35 @@ function App() {
     reader.readAsDataURL(file)
     
     try {
-      // Send the original image directly without preprocessing
+      // Load image into canvas for preprocessing
+      const img = new Image()
+      const imageLoaded = new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+      })
+      img.src = URL.createObjectURL(file)
+      await imageLoaded
+      
+      // Create processing canvas
+      const processCanvas = document.createElement('canvas')
+      processCanvas.width = 640
+      processCanvas.height = 640
+      const ctx = processCanvas.getContext('2d')
+      
+      // Draw and resize image to 640x640
+      ctx.drawImage(img, 0, 0, 640, 640)
+      
+      // Apply preprocessing (edge detection + skin detection for static images)
+      processImageToBWMask(ctx, 640, 640)
+      
+      // Convert preprocessed image to blob
+      const blob = await new Promise(resolve => processCanvas.toBlob(resolve, 'image/jpeg', 0.8))
+      
+      // Clean up object URL
+      URL.revokeObjectURL(img.src)
+      
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', blob, 'processed.jpg')
       
       const response = await fetch(API_URL, {
         method: 'POST',

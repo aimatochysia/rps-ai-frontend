@@ -7,11 +7,11 @@ const API_URL = 'https://rps-ai-sf3w.onrender.com/detect'
 const BACKGROUND_THRESHOLD = 30 // Difference threshold for background subtraction
 const EDGE_GRADIENT_THRESHOLD = 20 // Gradient magnitude threshold for edge detection
 
-// Colors for different classes
+// Grayscale colors for different classes (glassmorphic dark grey & white)
 const CLASS_COLORS = {
-  rock: { bg: 'rgba(239, 68, 68, 0.3)', border: '#ef4444', text: '#fca5a5' },
-  paper: { bg: 'rgba(59, 130, 246, 0.3)', border: '#3b82f6', text: '#93c5fd' },
-  scissors: { bg: 'rgba(34, 197, 94, 0.3)', border: '#22c55e', text: '#86efac' },
+  rock: { bg: 'rgba(255, 255, 255, 0.1)', border: '#ffffff', text: '#e5e5e5' },
+  paper: { bg: 'rgba(255, 255, 255, 0.1)', border: '#d4d4d4', text: '#e5e5e5' },
+  scissors: { bg: 'rgba(255, 255, 255, 0.1)', border: '#a3a3a3', text: '#e5e5e5' },
 }
 
 // Apply background subtraction and convert to B/W mask
@@ -100,6 +100,8 @@ function App() {
   const [lastProcessTime, setLastProcessTime] = useState(0)
   const [isProcessing, setIsProcessing] = useState(false)
   const [backgroundCaptured, setBackgroundCaptured] = useState(false)
+  const [showPreprocessing, setShowPreprocessing] = useState(false) // Toggle for preprocessing preview
+  const [preprocessedFrame, setPreprocessedFrame] = useState(null) // Store preprocessed frame for display
   
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
@@ -181,6 +183,9 @@ function App() {
       // Draw to process canvas and apply background subtraction
       processCtx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, 640, 640)
       applyBackgroundSubtraction(processCtx, 640, 640, backgroundRef.current)
+      
+      // Save preprocessed frame for optional display
+      setPreprocessedFrame(processCanvas.toDataURL('image/png'))
       
       // Convert preprocessed B/W mask to blob for API
       const blob = await new Promise(resolve => processCanvas.toBlob(resolve, 'image/jpeg', 0.8))
@@ -383,49 +388,49 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Animated background */}
+    <div className="min-h-screen bg-neutral-950">
+      {/* Subtle animated background - grayscale only */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-neutral-800 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-neutral-700 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-neutral-600 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse" style={{ animationDelay: '2s' }}></div>
       </div>
 
       <div className="relative z-10 container mx-auto px-4 py-8">
-        {/* Header */}
+        {/* Header - grayscale */}
         <header className="text-center mb-8">
-          <h1 className="text-4xl md:text-6xl font-black bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
+          <h1 className="text-4xl md:text-6xl font-black text-white mb-2">
             ✊ ✋ ✌️ RPS AI
           </h1>
-          <p className="text-slate-400 text-lg">Real-time Rock Paper Scissors Detection</p>
+          <p className="text-neutral-400 text-lg">Real-time Rock Paper Scissors Detection</p>
         </header>
 
         {/* Mode Selection */}
         {mode === 'select' && (
           <div className="max-w-2xl mx-auto">
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-3xl p-8 border border-slate-700/50 shadow-2xl">
+            <div className="bg-neutral-900/70 backdrop-blur-xl rounded-3xl p-8 border border-neutral-700/50 shadow-2xl">
               <h2 className="text-2xl font-bold text-white mb-6 text-center">Choose Input Mode</h2>
               <div className="grid md:grid-cols-2 gap-6">
                 {/* Live Feed Option */}
                 <button
                   onClick={() => setMode('live')}
-                  className="group relative overflow-hidden bg-gradient-to-br from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 border border-cyan-500/30 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-cyan-500/20"
+                  className="group relative overflow-hidden bg-neutral-800/50 hover:bg-neutral-800/70 border border-neutral-600/50 hover:border-neutral-500 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-neutral-900/50"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-400 to-blue-500 opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                  <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-5 transition-opacity"></div>
                   <div className="text-5xl mb-4">📹</div>
                   <h3 className="text-xl font-bold text-white mb-2">Live Camera Feed</h3>
-                  <p className="text-slate-400 text-sm">Real-time detection from your camera with continuous analysis every 3 seconds</p>
+                  <p className="text-neutral-400 text-sm">Real-time detection from your camera with continuous analysis</p>
                 </button>
 
                 {/* Image Upload Option */}
                 <button
                   onClick={() => setMode('image')}
-                  className="group relative overflow-hidden bg-gradient-to-br from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-500/30 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20"
+                  className="group relative overflow-hidden bg-neutral-800/50 hover:bg-neutral-800/70 border border-neutral-600/50 hover:border-neutral-500 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-neutral-900/50"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-400 to-pink-500 opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                  <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-5 transition-opacity"></div>
                   <div className="text-5xl mb-4">🖼️</div>
                   <h3 className="text-xl font-bold text-white mb-2">Upload Image</h3>
-                  <p className="text-slate-400 text-sm">Upload a single image for one-time hand gesture detection</p>
+                  <p className="text-neutral-400 text-sm">Upload a single image for one-time hand gesture detection</p>
                 </button>
               </div>
             </div>
@@ -435,26 +440,26 @@ function App() {
         {/* Live Feed Mode */}
         {mode === 'live' && (
           <div className="max-w-4xl mx-auto">
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/50 shadow-2xl">
+            <div className="bg-neutral-900/70 backdrop-blur-xl rounded-3xl p-6 border border-neutral-700/50 shadow-2xl">
               {/* Back button */}
               <button
                 onClick={() => setMode('select')}
-                className="mb-4 flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+                className="mb-4 flex items-center gap-2 text-neutral-400 hover:text-white transition-colors"
               >
                 <span>←</span> Back to selection
               </button>
 
               {/* Background capture instruction */}
               {!backgroundCaptured && cameraActive && (
-                <div className="mb-4 p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-xl">
-                  <p className="text-yellow-300 text-sm">
+                <div className="mb-4 p-4 bg-neutral-800/50 border border-neutral-600/50 rounded-xl">
+                  <p className="text-neutral-300 text-sm">
                     📸 Point camera at empty background (no hands), then click "Capture Background" to start detection.
                   </p>
                 </div>
               )}
 
               {/* Video container - nearly half screen */}
-              <div className="relative aspect-square max-h-[50vh] mx-auto bg-slate-900 rounded-2xl overflow-hidden border border-slate-700">
+              <div className="relative aspect-square max-h-[50vh] mx-auto bg-neutral-950 rounded-2xl overflow-hidden border border-neutral-700">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -469,7 +474,7 @@ function App() {
                 {/* Loading indicator */}
                 {isProcessing && (
                   <div className="absolute top-4 right-4">
-                    <div className="w-3 h-3 bg-cyan-400 rounded-full animate-ping"></div>
+                    <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
                   </div>
                 )}
                 {/* Hidden canvases for capture and preprocessing */}
@@ -477,35 +482,62 @@ function App() {
                 <canvas ref={processCanvasRef} className="hidden" />
               </div>
 
-              {/* Background capture button */}
+              {/* Optional preprocessing preview */}
+              {showPreprocessing && preprocessedFrame && (
+                <div className="mt-4">
+                  <p className="text-neutral-400 text-sm mb-2 text-center">Preprocessing Preview (B/W Mask)</p>
+                  <div className="relative aspect-square max-h-[30vh] mx-auto bg-neutral-950 rounded-2xl overflow-hidden border border-neutral-700">
+                    <img 
+                      src={preprocessedFrame} 
+                      alt="Preprocessed B/W mask" 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Buttons row */}
               {cameraActive && (
-                <div className="mt-4 flex justify-center">
+                <div className="mt-4 flex flex-wrap justify-center gap-3">
                   <button
                     onClick={captureBackground}
                     className={`px-4 py-2 rounded-xl font-semibold transition-all ${
                       backgroundCaptured 
-                        ? 'bg-slate-600 hover:bg-slate-500 text-slate-300' 
-                        : 'bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white animate-pulse'
+                        ? 'bg-neutral-700 hover:bg-neutral-600 text-neutral-300' 
+                        : 'bg-white hover:bg-neutral-200 text-neutral-900 animate-pulse'
                     }`}
                   >
                     {backgroundCaptured ? '🔄 Recapture Background' : '📸 Capture Background'}
                   </button>
+                  
+                  {backgroundCaptured && (
+                    <button
+                      onClick={() => setShowPreprocessing(!showPreprocessing)}
+                      className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                        showPreprocessing 
+                          ? 'bg-white text-neutral-900' 
+                          : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-300'
+                      }`}
+                    >
+                      {showPreprocessing ? '👁️ Hide Preview' : '👁️ Show Preview'}
+                    </button>
+                  )}
                 </div>
               )}
 
               {/* Status bar */}
               <div className="mt-4 flex flex-wrap justify-between items-center gap-4">
                 <div className="flex items-center gap-4">
-                  <div className={`flex items-center gap-2 ${cameraActive ? 'text-green-400' : 'text-red-400'}`}>
-                    <div className={`w-2 h-2 rounded-full ${cameraActive ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+                  <div className={`flex items-center gap-2 ${cameraActive ? 'text-neutral-300' : 'text-neutral-500'}`}>
+                    <div className={`w-2 h-2 rounded-full ${cameraActive ? 'bg-white animate-pulse' : 'bg-neutral-500'}`}></div>
                     {cameraActive ? 'Camera Active' : 'Camera Inactive'}
                   </div>
                   {lastProcessTime > 0 && (
-                    <span className="text-slate-500 text-sm">Last: {lastProcessTime}ms</span>
+                    <span className="text-neutral-500 text-sm">Last: {lastProcessTime}ms</span>
                   )}
                 </div>
                 {error && (
-                  <p className="text-red-400 text-sm">{error}</p>
+                  <p className="text-neutral-400 text-sm">{error}</p>
                 )}
               </div>
 
@@ -513,7 +545,7 @@ function App() {
               <div className="mt-6">
                 <h3 className="text-lg font-semibold text-white mb-3">Detections</h3>
                 {detections.length === 0 ? (
-                  <p className="text-slate-500">No gestures detected. Show rock, paper, or scissors to the camera!</p>
+                  <p className="text-neutral-500">No gestures detected. Show rock, paper, or scissors to the camera!</p>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                     {detections.map((det, idx) => {
@@ -521,8 +553,8 @@ function App() {
                       return (
                         <div
                           key={idx}
-                          className="p-4 rounded-xl border backdrop-blur-sm"
-                          style={{ backgroundColor: colors.bg, borderColor: colors.border }}
+                          className="p-4 rounded-xl border backdrop-blur-sm bg-neutral-800/50"
+                          style={{ borderColor: colors.border }}
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-2xl">
@@ -530,7 +562,7 @@ function App() {
                             </span>
                             <div className="text-right">
                               <div className="font-bold text-white capitalize">{det.class}</div>
-                              <div className="text-sm" style={{ color: colors.text }}>
+                              <div className="text-sm text-neutral-400">
                                 {((det.confidence || det.score || 0) * 100).toFixed(1)}%
                               </div>
                             </div>
@@ -548,7 +580,7 @@ function App() {
         {/* Image Upload Mode */}
         {mode === 'image' && (
           <div className="max-w-4xl mx-auto">
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/50 shadow-2xl">
+            <div className="bg-neutral-900/70 backdrop-blur-xl rounded-3xl p-6 border border-neutral-700/50 shadow-2xl">
               {/* Back button */}
               <button
                 onClick={() => {
@@ -556,7 +588,7 @@ function App() {
                   setImagePreview(null)
                   setDetections([])
                 }}
-                className="mb-4 flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+                className="mb-4 flex items-center gap-2 text-neutral-400 hover:text-white transition-colors"
               >
                 <span>←</span> Back to selection
               </button>
@@ -564,10 +596,10 @@ function App() {
               {/* Upload area */}
               {!imagePreview && (
                 <label className="block cursor-pointer">
-                  <div className="border-2 border-dashed border-slate-600 hover:border-purple-500 rounded-2xl p-12 text-center transition-colors">
+                  <div className="border-2 border-dashed border-neutral-600 hover:border-white rounded-2xl p-12 text-center transition-colors">
                     <div className="text-6xl mb-4">📤</div>
                     <p className="text-white text-lg mb-2">Click to upload an image</p>
-                    <p className="text-slate-500 text-sm">Supports JPG, PNG, WebP</p>
+                    <p className="text-neutral-500 text-sm">Supports JPG, PNG, WebP</p>
                   </div>
                   <input
                     ref={fileInputRef}
@@ -582,7 +614,7 @@ function App() {
               {/* Image preview with bounding boxes */}
               {imagePreview && (
                 <div className="space-y-4">
-                  <div className="relative aspect-square max-h-[50vh] mx-auto bg-slate-900 rounded-2xl overflow-hidden border border-slate-700">
+                  <div className="relative aspect-square max-h-[50vh] mx-auto bg-neutral-950 rounded-2xl overflow-hidden border border-neutral-700">
                     <img
                       src={imagePreview}
                       alt="Uploaded"
@@ -594,9 +626,9 @@ function App() {
                     </div>
                     {/* Loading overlay */}
                     {isLoading && (
-                      <div className="absolute inset-0 bg-slate-900/70 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-neutral-950/70 flex items-center justify-center">
                         <div className="flex flex-col items-center gap-3">
-                          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                          <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
                           <p className="text-white">Analyzing...</p>
                         </div>
                       </div>
@@ -611,7 +643,7 @@ function App() {
                         setDetections([])
                         if (fileInputRef.current) fileInputRef.current.value = ''
                       }}
-                      className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold rounded-xl transition-all hover:scale-105"
+                      className="px-6 py-3 bg-white hover:bg-neutral-200 text-neutral-900 font-semibold rounded-xl transition-all hover:scale-105"
                     >
                       Upload New Image
                     </button>
@@ -621,10 +653,10 @@ function App() {
                   <div className="mt-6">
                     <h3 className="text-lg font-semibold text-white mb-3">Detections</h3>
                     {error && (
-                      <p className="text-red-400 mb-3">{error}</p>
+                      <p className="text-neutral-400 mb-3">{error}</p>
                     )}
                     {detections.length === 0 && !isLoading ? (
-                      <p className="text-slate-500">No gestures detected in this image.</p>
+                      <p className="text-neutral-500">No gestures detected in this image.</p>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         {detections.map((det, idx) => {
@@ -632,8 +664,8 @@ function App() {
                           return (
                             <div
                               key={idx}
-                              className="p-4 rounded-xl border backdrop-blur-sm"
-                              style={{ backgroundColor: colors.bg, borderColor: colors.border }}
+                              className="p-4 rounded-xl border backdrop-blur-sm bg-neutral-800/50"
+                              style={{ borderColor: colors.border }}
                             >
                               <div className="flex items-center justify-between">
                                 <span className="text-2xl">
@@ -641,7 +673,7 @@ function App() {
                                 </span>
                                 <div className="text-right">
                                   <div className="font-bold text-white capitalize">{det.class}</div>
-                                  <div className="text-sm" style={{ color: colors.text }}>
+                                  <div className="text-sm text-neutral-400">
                                     {((det.confidence || det.score || 0) * 100).toFixed(1)}%
                                   </div>
                                 </div>
@@ -659,7 +691,7 @@ function App() {
         )}
 
         {/* Footer */}
-        <footer className="mt-12 text-center text-slate-500 text-sm">
+        <footer className="mt-12 text-center text-neutral-500 text-sm">
           <p>Powered by ONNX Runtime • Deployed on Render</p>
         </footer>
       </div>

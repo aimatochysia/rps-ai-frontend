@@ -138,6 +138,8 @@ function App() {
     ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, 640, 640)
     backgroundRef.current = ctx.getImageData(0, 0, 640, 640)
     setBackgroundCaptured(true)
+    // Auto-enable preview so users can immediately see the B/W mask
+    setShowPreprocessing(true)
   }, [])
 
   // Capture frame from video and send to API (waits for response before next detection)
@@ -453,13 +455,25 @@ function App() {
               {!backgroundCaptured && cameraActive && (
                 <div className="mb-4 p-4 bg-neutral-800/50 border border-neutral-600/50 rounded-xl">
                   <p className="text-neutral-300 text-sm">
-                    📸 Point camera at empty background (no hands), then click "Capture Background" to start detection.
+                    <strong>Step 1:</strong> Point camera at empty background (no hands visible)<br/>
+                    <strong>Step 2:</strong> Click "Capture Background" button below<br/>
+                    <strong>Step 3:</strong> Show your hand gesture - detection will start automatically!
+                  </p>
+                </div>
+              )}
+              
+              {/* Detection active indicator */}
+              {backgroundCaptured && cameraActive && (
+                <div className="mb-4 p-4 bg-neutral-800/50 border border-neutral-600/50 rounded-xl">
+                  <p className="text-neutral-300 text-sm">
+                    ✅ Detection active! Show rock ✊, paper ✋, or scissors ✌️ to the camera. 
+                    The B/W preview shows what the AI sees after background removal.
                   </p>
                 </div>
               )}
 
               {/* Video container with optional side-by-side preview */}
-              <div className={`grid gap-4 ${showPreprocessing && preprocessedFrame ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+              <div className={`grid gap-4 ${showPreprocessing ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
                 {/* Live video feed */}
                 <div>
                   <p className="text-neutral-400 text-sm mb-2 text-center">Live Feed</p>
@@ -488,15 +502,21 @@ function App() {
                 </div>
 
                 {/* B/W Preview side-by-side when enabled */}
-                {showPreprocessing && preprocessedFrame && (
+                {showPreprocessing && (
                   <div>
                     <p className="text-neutral-400 text-sm mb-2 text-center">Background Removed (B/W Mask)</p>
                     <div className="relative aspect-square max-h-[50vh] mx-auto bg-neutral-950 rounded-2xl overflow-hidden border border-neutral-700">
-                      <img 
-                        src={preprocessedFrame} 
-                        alt="Preprocessed B/W mask" 
-                        className="w-full h-full object-cover"
-                      />
+                      {preprocessedFrame ? (
+                        <img 
+                          src={preprocessedFrame} 
+                          alt="Preprocessed B/W mask" 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <p className="text-neutral-500 text-sm">Waiting for first frame...</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

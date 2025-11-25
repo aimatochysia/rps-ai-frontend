@@ -3,6 +3,10 @@ import './App.css'
 
 const API_URL = 'https://rps-ai-sf3w.onrender.com/detect'
 
+// Preprocessing thresholds (adjust based on lighting conditions)
+const BACKGROUND_THRESHOLD = 30 // Difference threshold for background subtraction
+const EDGE_GRADIENT_THRESHOLD = 20 // Gradient magnitude threshold for edge detection
+
 // Colors for different classes
 const CLASS_COLORS = {
   rock: { bg: 'rgba(239, 68, 68, 0.3)', border: '#ef4444', text: '#fca5a5' },
@@ -16,9 +20,6 @@ const applyBackgroundSubtraction = (ctx, width, height, backgroundData) => {
   const current = currentData.data
   const background = backgroundData.data
   
-  // Threshold for detecting foreground (difference from background)
-  const threshold = 30
-  
   for (let i = 0; i < current.length; i += 4) {
     // Calculate difference from background
     const diffR = Math.abs(current[i] - background[i])
@@ -27,7 +28,7 @@ const applyBackgroundSubtraction = (ctx, width, height, backgroundData) => {
     const maxDiff = Math.max(diffR, diffG, diffB)
     
     // Convert to B/W mask: white for foreground (hand), black for background
-    if (maxDiff > threshold) {
+    if (maxDiff > BACKGROUND_THRESHOLD) {
       current[i] = 255     // R
       current[i + 1] = 255 // G
       current[i + 2] = 255 // B
@@ -42,19 +43,18 @@ const applyBackgroundSubtraction = (ctx, width, height, backgroundData) => {
   ctx.putImageData(currentData, 0, 0)
 }
 
-// Process image to B/W mask using simple background detection (skin detection fallback)
+// Process image to B/W mask using edge detection + skin color heuristics
 const processImageToBWMask = (ctx, width, height) => {
   const imageData = ctx.getImageData(0, 0, width, height)
   const data = imageData.data
   
-  // Use edge detection + contrast enhancement as a simpler approach for static images
-  // First pass: detect high contrast areas (likely hand vs background)
+  // First pass: convert to grayscale for edge detection
   const grayscale = new Uint8Array(width * height)
   for (let i = 0; i < data.length; i += 4) {
     grayscale[i / 4] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2])
   }
   
-  // Apply Sobel-like edge detection and threshold
+  // Apply Sobel-like edge detection and combine with skin color heuristics
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const idx = y * width + x
@@ -65,14 +65,14 @@ const processImageToBWMask = (ctx, width, height) => {
       const gy = grayscale[idx + width] - grayscale[idx - width]
       const gradient = Math.sqrt(gx * gx + gy * gy)
       
-      // Also check for skin-like colors (simple heuristic)
+      // Simple skin-like color heuristic (works across various skin tones)
       const r = data[pixelIdx]
       const g = data[pixelIdx + 1]
       const b = data[pixelIdx + 2]
       const isSkinLike = r > 60 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > 15
       
       // Combine edge detection with skin detection
-      const isForeground = gradient > 20 || isSkinLike
+      const isForeground = gradient > EDGE_GRADIENT_THRESHOLD || isSkinLike
       
       if (isForeground) {
         data[pixelIdx] = 255
@@ -108,7 +108,7 @@ function App() {
   const fileInputRef = useRef(null)
   const processingRef = useRef(false)
   const backgroundRef = useRef(null) // Store background frame
-  const continuousDetectionRef = useRef(true) // Control continuous detection
+  const continuousDetectionRef = useRef(false) // Control continuous detection
 
   // Capture background frame for subtraction
   const captureBackground = useCallback(() => {
@@ -142,8 +142,7 @@ function App() {
   const captureAndDetect = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current || !processCanvasRef.current || processingRef.current) return
     if (!backgroundRef.current) {
-      // Auto-capture background if not done yet
-      captureBackground()
+      // Background not captured yet - wait for user to capture it
       return
     }
     
@@ -217,7 +216,7 @@ function App() {
         }, 100)
       }
     }
-  }, [captureBackground])
+  }, [])
 
   // Start camera stream
   const startCamera = useCallback(async () => {

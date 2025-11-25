@@ -19,6 +19,19 @@ npm run dev
 
 This frontend connects to a backend API at `/detect` endpoint that runs an ONNX model for gesture detection.
 
+### Expected Response Format
+
+The frontend expects detections in this format:
+
+```json
+{
+  "detections": [
+    { "class": "rock", "confidence": 0.95, "bbox": [x1, y1, x2, y2] },
+    { "class": "paper", "confidence": 0.87, "bbox": [x1, y1, x2, y2] }
+  ]
+}
+```
+
 ### Backend Code Example
 
 ```python
@@ -39,15 +52,48 @@ app.add_middleware(
 )
 
 session = ort.InferenceSession("rps_ai.onnx")
+CLASS_NAMES = ["rock", "paper", "scissors"]
+CONFIDENCE_THRESHOLD = 0.5
 
 @app.post("/detect")
 async def detect(file: UploadFile = File(...)):
     img = Image.open(file.file).convert("RGB")
-    img = np.array(img).transpose(2, 0, 1) / 255.0
-    img = img[None].astype(np.float32)
+    img = img.resize((640, 640))
+    img_array = np.array(img).transpose(2, 0, 1) / 255.0
+    img_array = img_array[None].astype(np.float32)
+    
     # IMPORTANT: The ONNX model expects the input tensor to be named "images"
-    outputs = session.run(None, {"images": img})
-    return {"detections": outputs[0].tolist()}
+    outputs = session.run(None, {"images": img_array})
+    
+    # Post-process YOLO output: shape is typically (1, num_classes + 4, num_detections)
+    # where first 4 values are x_center, y_center, width, height
+    predictions = outputs[0][0]  # Remove batch dimension
+    
+    detections = []
+    # Transpose to (num_detections, num_classes + 4) for easier processing
+    predictions = predictions.T
+    
+    for pred in predictions:
+        x_center, y_center, width, height = pred[:4]
+        class_scores = pred[4:]
+        
+        class_id = np.argmax(class_scores)
+        confidence = class_scores[class_id]
+        
+        if confidence >= CONFIDENCE_THRESHOLD:
+            # Convert from center format to corner format
+            x1 = x_center - width / 2
+            y1 = y_center - height / 2
+            x2 = x_center + width / 2
+            y2 = y_center + height / 2
+            
+            detections.append({
+                "class": CLASS_NAMES[class_id],
+                "confidence": float(confidence),
+                "bbox": [float(x1), float(y1), float(x2), float(y2)]
+            })
+    
+    return {"detections": detections}
 ```
 
 > **Note**: The ONNX model's input tensor is named `"images"`. Using `"input"` will result in the error:

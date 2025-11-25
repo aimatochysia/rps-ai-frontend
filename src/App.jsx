@@ -270,22 +270,17 @@ function App() {
 
   // Set up continuous detection for live mode (waits for response before next request)
   useEffect(() => {
-    if (cameraActive && mode === 'live') {
+    if (cameraActive && mode === 'live' && backgroundCaptured) {
       continuousDetectionRef.current = true
       
-      // Initial detection after a short delay to ensure video is ready
-      const timeout = setTimeout(() => {
-        if (continuousDetectionRef.current) {
-          captureAndDetect()
-        }
-      }, 1000)
+      // Start detection immediately when background is captured
+      captureAndDetect()
       
       return () => {
-        clearTimeout(timeout)
         continuousDetectionRef.current = false
       }
     }
-  }, [cameraActive, mode, captureAndDetect])
+  }, [cameraActive, mode, backgroundCaptured, captureAndDetect])
 
   // Handle image upload - preprocess to B/W mask before sending to API
   const handleImageUpload = async (e) => {

@@ -5,7 +5,6 @@ const API_URL = 'https://rps-ai-sf3w.onrender.com/detect'
 
 // Preprocessing thresholds (adjust based on lighting conditions)
 const BACKGROUND_THRESHOLD = 30 // Difference threshold for background subtraction
-const EDGE_GRADIENT_THRESHOLD = 20 // Gradient magnitude threshold for edge detection
 
 // Grayscale colors for different classes (glassmorphic dark grey & white)
 const CLASS_COLORS = {
@@ -41,53 +40,6 @@ const applyBackgroundSubtraction = (ctx, width, height, backgroundData) => {
   }
   
   ctx.putImageData(currentData, 0, 0)
-}
-
-// Process image to B/W mask using edge detection + skin color heuristics
-const processImageToBWMask = (ctx, width, height) => {
-  const imageData = ctx.getImageData(0, 0, width, height)
-  const data = imageData.data
-  
-  // First pass: convert to grayscale for edge detection
-  const grayscale = new Uint8Array(width * height)
-  for (let i = 0; i < data.length; i += 4) {
-    grayscale[i / 4] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2])
-  }
-  
-  // Apply Sobel-like edge detection and combine with skin color heuristics
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      const idx = y * width + x
-      const pixelIdx = idx * 4
-      
-      // Calculate gradient magnitude using neighboring pixels
-      const gx = grayscale[idx + 1] - grayscale[idx - 1]
-      const gy = grayscale[idx + width] - grayscale[idx - width]
-      const gradient = Math.sqrt(gx * gx + gy * gy)
-      
-      // Simple skin-like color heuristic (works across various skin tones)
-      const r = data[pixelIdx]
-      const g = data[pixelIdx + 1]
-      const b = data[pixelIdx + 2]
-      const isSkinLike = r > 60 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > 15
-      
-      // Combine edge detection with skin detection
-      const isForeground = gradient > EDGE_GRADIENT_THRESHOLD || isSkinLike
-      
-      if (isForeground) {
-        data[pixelIdx] = 255
-        data[pixelIdx + 1] = 255
-        data[pixelIdx + 2] = 255
-      } else {
-        data[pixelIdx] = 0
-        data[pixelIdx + 1] = 0
-        data[pixelIdx + 2] = 0
-      }
-      data[pixelIdx + 3] = 255
-    }
-  }
-  
-  ctx.putImageData(imageData, 0, 0)
 }
 
 function App() {
@@ -285,7 +237,7 @@ function App() {
     }
   }, [cameraActive, mode, captureAndDetect])
 
-  // Handle image upload with preprocessing
+  // Handle image upload - send original image without preprocessing
   const handleImageUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -299,35 +251,9 @@ function App() {
     reader.readAsDataURL(file)
     
     try {
-      // Load image into canvas for preprocessing
-      const img = new Image()
-      const imageLoaded = new Promise((resolve, reject) => {
-        img.onload = resolve
-        img.onerror = reject
-      })
-      img.src = URL.createObjectURL(file)
-      await imageLoaded
-      
-      // Create processing canvas
-      const processCanvas = document.createElement('canvas')
-      processCanvas.width = 640
-      processCanvas.height = 640
-      const ctx = processCanvas.getContext('2d')
-      
-      // Draw and resize image to 640x640
-      ctx.drawImage(img, 0, 0, 640, 640)
-      
-      // Apply preprocessing (edge detection + skin detection for static images)
-      processImageToBWMask(ctx, 640, 640)
-      
-      // Convert preprocessed image to blob
-      const blob = await new Promise(resolve => processCanvas.toBlob(resolve, 'image/jpeg', 0.8))
-      
-      // Clean up object URL
-      URL.revokeObjectURL(img.src)
-      
+      // Send the original image directly without preprocessing
       const formData = new FormData()
-      formData.append('file', blob, 'processed.jpg')
+      formData.append('file', file)
       
       const response = await fetch(API_URL, {
         method: 'POST',
@@ -458,43 +384,49 @@ function App() {
                 </div>
               )}
 
-              {/* Video container - nearly half screen */}
-              <div className="relative aspect-square max-h-[50vh] mx-auto bg-neutral-950 rounded-2xl overflow-hidden border border-neutral-700">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                />
-                {/* Bounding box overlay */}
-                <div className="absolute inset-0">
-                  {renderBoundingBoxes()}
-                </div>
-                {/* Loading indicator */}
-                {isProcessing && (
-                  <div className="absolute top-4 right-4">
-                    <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
-                  </div>
-                )}
-                {/* Hidden canvases for capture and preprocessing */}
-                <canvas ref={canvasRef} className="hidden" />
-                <canvas ref={processCanvasRef} className="hidden" />
-              </div>
-
-              {/* Optional preprocessing preview */}
-              {showPreprocessing && preprocessedFrame && (
-                <div className="mt-4">
-                  <p className="text-neutral-400 text-sm mb-2 text-center">Preprocessing Preview (B/W Mask)</p>
-                  <div className="relative aspect-square max-h-[30vh] mx-auto bg-neutral-950 rounded-2xl overflow-hidden border border-neutral-700">
-                    <img 
-                      src={preprocessedFrame} 
-                      alt="Preprocessed B/W mask" 
+              {/* Video container with optional side-by-side preview */}
+              <div className={`grid gap-4 ${showPreprocessing && preprocessedFrame ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+                {/* Live video feed */}
+                <div>
+                  <p className="text-neutral-400 text-sm mb-2 text-center">Live Feed</p>
+                  <div className="relative aspect-square max-h-[50vh] mx-auto bg-neutral-950 rounded-2xl overflow-hidden border border-neutral-700">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
                       className="w-full h-full object-cover"
                     />
+                    {/* Bounding box overlay */}
+                    <div className="absolute inset-0">
+                      {renderBoundingBoxes()}
+                    </div>
+                    {/* Loading indicator */}
+                    {isProcessing && (
+                      <div className="absolute top-4 right-4">
+                        <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
+                      </div>
+                    )}
+                    {/* Hidden canvases for capture and preprocessing */}
+                    <canvas ref={canvasRef} className="hidden" />
+                    <canvas ref={processCanvasRef} className="hidden" />
                   </div>
                 </div>
-              )}
+
+                {/* B/W Preview side-by-side when enabled */}
+                {showPreprocessing && preprocessedFrame && (
+                  <div>
+                    <p className="text-neutral-400 text-sm mb-2 text-center">Background Removed (B/W Mask)</p>
+                    <div className="relative aspect-square max-h-[50vh] mx-auto bg-neutral-950 rounded-2xl overflow-hidden border border-neutral-700">
+                      <img 
+                        src={preprocessedFrame} 
+                        alt="Preprocessed B/W mask" 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Buttons row */}
               {cameraActive && (

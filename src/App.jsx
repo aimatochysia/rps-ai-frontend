@@ -3,7 +3,6 @@ import './App.css'
 
 const API_URL = 'https://rps-ai-sf3w.onrender.com/detect'
 
-// Colors for different CXR classes
 const CLASS_COLORS = {
   diaphragm: { bg: 'rgba(59, 130, 246, 0.2)', border: '#3b82f6', text: '#93c5fd' },
   heart: { bg: 'rgba(239, 68, 68, 0.2)', border: '#ef4444', text: '#fca5a5' },
@@ -11,7 +10,6 @@ const CLASS_COLORS = {
   right_lobe: { bg: 'rgba(168, 85, 247, 0.2)', border: '#a855f7', text: '#d8b4fe' },
 }
 
-// Icons for CXR classes
 const CLASS_ICONS = {
   diaphragm: '〰️',
   heart: '❤️',
@@ -27,7 +25,6 @@ function App() {
   
   const fileInputRef = useRef(null)
 
-  // Handle image upload - send directly to API without preprocessing
   const handleImageUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -36,7 +33,6 @@ function App() {
     setError(null)
     setDetections([])
     
-    // Show preview
     const reader = new FileReader()
     reader.onload = (e) => setImagePreview(e.target.result)
     reader.readAsDataURL(file)
@@ -61,19 +57,16 @@ function App() {
     }
   }
 
-  // Get color for detection class
   const getClassColor = (className) => {
     const normalizedClass = className?.toLowerCase()
     return CLASS_COLORS[normalizedClass] || { bg: 'rgba(156, 163, 175, 0.3)', border: '#9ca3af', text: '#d1d5db' }
   }
 
-  // Get icon for detection class
   const getClassIcon = (className) => {
     const normalizedClass = className?.toLowerCase()
     return CLASS_ICONS[normalizedClass] || '🔍'
   }
 
-  // Render bounding boxes
   const renderBoundingBoxes = () => {
     return detections.map((det, idx) => {
       const colors = getClassColor(det.class)
@@ -110,7 +103,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950">
-      {/* Subtle animated background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-900 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-900 rounded-full mix-blend-multiply filter blur-3xl opacity-15 animate-pulse" style={{ animationDelay: '1s' }}></div>
@@ -118,7 +110,6 @@ function App() {
       </div>
 
       <div className="relative z-10 container mx-auto px-4 py-8">
-        {/* Header */}
         <header className="text-center mb-8">
           <h1 className="text-4xl md:text-6xl font-black text-white mb-2">
             🩻 CXR AI
@@ -126,11 +117,9 @@ function App() {
           <p className="text-neutral-400 text-lg">Chest X-Ray Analysis</p>
         </header>
 
-        {/* Main Content */}
         <div className="max-w-4xl mx-auto">
           <div className="bg-neutral-900/70 backdrop-blur-xl rounded-3xl p-6 border border-neutral-700/50 shadow-2xl">
             
-            {/* Upload area */}
             {!imagePreview && (
               <label className="block cursor-pointer">
                 <div className="border-2 border-dashed border-neutral-600 hover:border-blue-500 rounded-2xl p-12 text-center transition-colors">
@@ -148,7 +137,6 @@ function App() {
               </label>
             )}
 
-            {/* Image preview with bounding boxes */}
             {imagePreview && (
               <div className="space-y-4">
                 <div className="relative aspect-square max-h-[60vh] mx-auto bg-neutral-950 rounded-2xl overflow-hidden border border-neutral-700">
@@ -157,11 +145,9 @@ function App() {
                     alt="Uploaded X-Ray"
                     className="w-full h-full object-contain"
                   />
-                  {/* Bounding box overlay */}
                   <div className="absolute inset-0">
                     {renderBoundingBoxes()}
                   </div>
-                  {/* Loading overlay */}
                   {isLoading && (
                     <div className="absolute inset-0 bg-neutral-950/70 flex items-center justify-center">
                       <div className="flex flex-col items-center gap-3">
@@ -172,7 +158,6 @@ function App() {
                   )}
                 </div>
 
-                {/* Upload new button */}
                 <div className="flex justify-center">
                   <button
                     onClick={() => {
@@ -187,7 +172,6 @@ function App() {
                   </button>
                 </div>
 
-                {/* Detections display */}
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold text-white mb-3">Detected Structures</h3>
                   {error && (
@@ -224,7 +208,6 @@ function App() {
                   )}
                 </div>
 
-                {/* Legend */}
                 <div className="mt-6 p-4 bg-neutral-800/30 rounded-xl">
                   <h4 className="text-sm font-semibold text-neutral-400 mb-3">Detection Classes</h4>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -246,9 +229,8 @@ function App() {
           </div>
         </div>
 
-        {/* Footer */}
         <footer className="mt-12 text-center text-neutral-500 text-sm">
-          <p>Powered by ONNX Runtime • Deployed on Render</p>
+          <p>Powered by ONNX Runtime | Deployed on Render</p>
         </footer>
       </div>
     </div>

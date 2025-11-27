@@ -123,7 +123,6 @@ function App() {
             {!imagePreview && (
               <label className="block cursor-pointer">
                 <div className="border-2 border-dashed border-neutral-600 hover:border-blue-500 rounded-2xl p-12 text-center transition-colors">
-                  <div className="text-6xl mb-4">🩻</div>
                   <p className="text-white text-lg mb-2">Click to upload a Chest X-Ray</p>
                   <p className="text-neutral-500 text-sm">Supports JPG, PNG, WebP</p>
                 </div>
@@ -230,7 +229,7 @@ function App() {
         </div>
 
         <footer className="mt-12 text-center text-neutral-500 text-sm">
-          <p>Powered by ONNX Runtime | Deployed on Render</p>
+          <p>Powered by ONNX Runtime | Deployed on Render | by Petra Michael</p>
         </footer>
       </div>
     </div>
